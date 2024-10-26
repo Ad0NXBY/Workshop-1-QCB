@@ -111,3 +111,92 @@ sample.meta.data<-sample.meta.data %>%
   select(-sra.sample_attributes)
 
 head(sample.meta.data)
+
+#Create a dataframe called gene.meta.data containing only the gene id and the gene name
+gene.meta.data <- rowData(SRP012015.recount3) %>% as.data.frame() %>% select(gene_id, gene_name)
+head(gene.meta.data)
+
+#Create a DGEList object called dgelist containing the count matrix data #don't understand this part
+dgelist <- DGEList(assay(SRP012015.recount3, "counts"))
+class(dgelist)
+head(dgelist$counts)
+head(dgelist$samples)
+
+#how many genes have all zeros across the samples?
+number.of.all.zero <- sum(rowSums(dgelist$counts)== 0)
+
+#what fraction of the total number of genes is this
+fraction.all.zero <- number.of.all.zero/sum(rowSum(dgelist$counts)) #why does the sum(rowSum) not work?
+fraction.all.zero<- number.of.all.zero/dim(dgelist)[1]
+
+#Calculate counts per million (cpm) and Log2 counts per million (lcpm) data matrices
+cpm <- cpm(dgelist)
+lcpm <- cpm(log(dgelist)) ??? non-numeric argument
+lcpm <- cpm(dgelist, log = TRUE)
+head(cpm)
+head(lcpm)
+
+#create a long (tidy) format fata frame for LogCPM values
+long.lcpm <- as.data.frame(lcpm) %>%
+  rownames_to_column("Gene_ID") %>%
+  pivot_longer(-Gene_ID, values_to = "LogPCM", names_to = "SRR_ID")
+
+head(long.lcpm)
+
+#Plot sample distribution by SAMPLE
+ggplot(long.lcpm) + geom_density(aes(LogPCM, color = SRR_ID)) #why is it like this can you explain this to me
+
+#Obtain an indec of those genes that pass the expression filter using default parameters, using filterByExpr()
+index.keep.expr <- filterByExpr(dgelist)
+
+#Specifiy the group parameters in filterByExpr(), set this as the cell type from the sample.meta.data dataframe
+index.keep.expr <- filterByExpr(dgelist, group = sample.meta.data$Celltype)
+head(index.keep.expr)  
+
+#Filter dgelist using filtering indx, assign it to a new object called dgelist.filtered
+dgelist.filtered <- dgelist[index.keep.expr, , keep.lib.sizes = FALSE]
+dim(dgelist.filtered)
+
+#Plot sample distribitions of LogCPM for the filtered data
+lcpm.filtered <- cpm(dgelist.filtered, log = TRUE)
+long.lcpm.filtered <- as.data.frame(lcpm.filtered) %>%
+  rownames_to_column("Gene_ID") %>%
+  pivot_longer(-Gene_ID, values_to = "LogCPM", names_to = "SRR_ID")
+ggplot(long.lcpm.filtered) + geom_density(aes(LogCPM,color = SRR_ID))
+
+#use calcNormFactors() functions to reate new DGEList object called dgelist.filtered.norm
+dgelist.filtered.norm <- calcNormFactors(dgelist.filtered, method = "TMM")
+dgelist.filtered.norm$samples$norm.factors
+
+#Calculate CPM and Log2 CPM values from the dgelist.filtered.norm object
+cpm.dgelist.filtered.norm <- cpm(dgelist.filtered.norm)
+lcpm.dgelist.filtered.norm <- cpm(dgelist.filtered.norm, log = TRUE)
+
+#Create long format dataframe called df.plotting containing these LogCPM and CPM values
+long.cpm.dgelist.filtered.norm <- as.data.frame(cpm.dgelist.filtered.norm) %>%
+  rownames_to_column("Gene_ID") %>%
+  pivot_longer(-Gene_ID, values_to = "CPM", names_to = "SRR_ID")
+
+long.lcpm.dgelist.filtered.norm <- as.data.frame(lcpm.dgelist.filtered.norm) %>%
+  rownames_to_column("Gene_ID") %>%
+  pivot_longer(-Gene_ID, values_to = "LogCPM", names_to = "SRR_ID")
+
+df.plotting <- full_join(long.cpm.dgelist.filtered.norm, long.lcpm.dgelist.filtered.norm)
+
+dim(long.cpm.dgelist.filtered.norm)
+dim(long.lcpm.dgelist.filtered.norm)
+dim(df.plotting)
+
+#Join the sample.meta.data and gene.meta.data dataframes to df.plotting
+df.plotting <- left_join(df.plotting, sample.meta.data, by = c("SRR_ID"= "external_id"))
+#head(df.plotting)
+df.plotting <- left_join(df.plotting, gene.meta.data, by = c("Gene_ID" = "gene_id"))
+head(df.plotting)
+
+#Filter for the gene FCGR1A, plot the CPM values split by Celltype and colored by Donor
+ggplot(df.plotting %>% filter(gene_name== "FCGR1A")) +
+  geom_point(aes(x= Celltype, y= CPM, color = Donor)) + 
+  ggtitle("FCGR1A")
+
+#save following objects in an Rdata file 
+save(dgelist.filtered.norm, sample.meta.data, gene.meta.data, cpm.dgelist.filtered.norm, lcpm.dgelist.filtered.norm, file = "Workshop1_output.Rdata")
