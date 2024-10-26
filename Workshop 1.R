@@ -74,3 +74,40 @@ ggplot(VEGFA_data,aes(x=Tissue, y=Counts, color = Patients)) +
 #Load recount3 and edgeR library
 library(recount3)
 library(edgeR)
+
+#Find SRA project ID from GEO accession number GSE36952 
+#Use code snippet at the bottom of the page to retrieve data set
+SRP012015.recount3 <- recount3::create_rse_manual(
+  project = "SRP012015",
+  project_home = "data_sources/sra",
+  organism = "human",
+  annotation = "gencode_v26",
+  type = "gene"
+)
+
+#What class of R object is the data?
+class(SRP012015.recount3)
+
+#use functions Assay() and rowData() to look at the first 6 rows of the data matrix and the gene meta data
+assay(SRP012015.recount3) %>% head()
+rowData(SRP012015.recount3) %>% head()
+
+#What are the column names in the sample meta data? why do you add colData()??
+colnames(colData(SRP012015.recount3))
+
+#What is the name of the assay for the data matrix that's been retrieved, and what are these values?
+assayNames(SRP012015.recount3)
+assay(SRP012015.recount3, "counts") <- compute_read_counts(SRP012015.recount3, round = FALSE)
+assayNames(SRP012015.recount3)
+
+#Create a dataframe called sample.meta.data containing only the SRR id and the sra.sample_attributes column
+sample.meta.data <- colData(SRP012015.recount3) %>% as.data.frame() %>% select(external_id, sra.sample_attributes)
+head(sample.meta.data)
+
+#Extract the cell type category (M1 or M2) and donor category (1,2 or 3) from the sra.sample_attributes column
+sample.meta.data<-sample.meta.data %>% 
+  mutate("Celltype"=str_split_fixed(sra.sample_attributes, ";;", 3)[,2] %>% str_sub(start=1, end=2),
+         "Donor"=str_split_fixed(sra.sample_attributes, ";;", 3)[,3] %>% str_sub(start=1, end=1)) %>%
+  select(-sra.sample_attributes)
+
+head(sample.meta.data)
