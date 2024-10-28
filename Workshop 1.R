@@ -102,6 +102,7 @@ assayNames(SRP012015.recount3)
 
 #Create a dataframe called sample.meta.data containing only the SRR id and the sra.sample_attributes column
 sample.meta.data <- colData(SRP012015.recount3) %>% as.data.frame() %>% select(external_id, sra.sample_attributes)
+
 head(sample.meta.data)
 
 #Extract the cell type category (M1 or M2) and donor category (1,2 or 3) from the sra.sample_attributes column
